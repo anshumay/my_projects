@@ -1,0 +1,45 @@
+# Taking the Top 100 Songs of any time from the past and creating a Spotify Playlist featuring all the songs
+
+from bs4 import BeautifulSoup
+import requests
+import os
+import spotipy
+from spotipy.oauth2 import SpotifyOAuth
+
+SPOTIPY_CLIENT_ID = os.getenv('SPOTIPY_CLIENT_ID')
+SPOTIPY_CLIENT_SECRET = os.getenv('SPOTIPY_CLIENT_SECRET')
+
+year_input = input("Which year do you want to travel to? Type the date in this format YYYY-MM-DD: ")
+
+URL = "https://www.billboard.com/charts/hot-100/"
+
+response = requests.get(f"{URL}{year_input}/")
+billboard_webpage = response.text
+soup = BeautifulSoup(billboard_webpage, "html.parser")
+
+songs_details = soup.select("li #title-of-a-story")
+song_list = [song.getText().strip() for song in songs_details]
+
+uri = 'http://example.com'
+scope = "playlist-modify-private"
+
+
+sp = spotipy.Spotify(auth_manager=SpotifyOAuth(client_id=SPOTIPY_CLIENT_ID, client_secret=SPOTIPY_CLIENT_SECRET,
+                                               redirect_uri=uri, scope=scope, show_dialog=True, cache_path="token.txt"))
+user_id = sp.current_user()["id"]
+year = year_input.split('-')[0]
+
+song_uri = []
+for song in song_list:
+    song_query = f"track:{song} year:{year}"
+    results = sp.search(q=song_query, type='track')
+    try:
+        song_uri.append(results["tracks"]["items"][0]["uri"])
+    except IndexError:
+        print(f"{song} doesn't exist in Spotify. Skipped.")
+
+playlist = sp.user_playlist_create(user=user_id, name=f"{year_input} Billboard 100", public=False)
+
+sp.playlist_add_items(playlist_id=playlist['id'], items=song_uri)
+
+
